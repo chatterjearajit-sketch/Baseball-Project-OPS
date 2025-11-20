@@ -1,0 +1,68 @@
+# Re-import necessary libraries after execution reset
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+# Sample CSV data as a DataFrame
+data = {
+    "Season": [2017, 2018, 2019, 2020, 2021, 2022],
+    "OPS": [0.966, 0.922, 0.821, 0.833, 0.879, 981],
+    "Barrel%": [13.3, 13.6, 11.3, 10.7, 13.6, 11.6],
+    "EV mph": [91.5, 90.8, 90.1, 89.2, 92.6, 90.8],
+    "LA Sweet Spot%": [32.8, 37.1, 36.4, 42.3, 36.9, 31.8],
+    "XBA": [0.284, 0.271, 0.257, 0.285, 0.293, 0.261],
+    "XSLG": [0.560, 0.533, 0.509, 0.510, 0.575, 0.482],
+    "XWOBA": [0.397, 0.384, 0.359, 0.396, 0.397, 0.367],
+    "HardHit%": [47.5,44.0 , 42.4, 40.9, 50.6, 47.4],
+    "K%": [22.1, 25.1, 24.3, 18.6, 20.0, 21.7],
+    "BB%": [14.2, 13.0, 11.4, 16.0, 9.9, 12.1],
+}
+
+df = pd.DataFrame(data)
+
+# Fit regression model
+predictors = ["Barrel%", "EV mph", "LA Sweet Spot%", "XBA", "XSLG", "XWOBA", "HardHit%", "K%", "BB%"]
+X = df[predictors]
+y = df["OPS"]
+
+model = LinearRegression()
+model.fit(X, y)
+betas = model.coef_
+intercept = model.intercept_
+
+# Simulate OPS using an Ornstein-Uhlenbeck process
+theta = 0.5  # Mean reversion rate
+sigma = df["OPS"].std()  # Volatility
+dt = 1  # One-year time step
+
+years_future = 10
+num_simulations = 100
+future_seasons = np.arange(df["Season"].max() + 1, df["Season"].max() + years_future + 1)
+simulated_paths = np.zeros((num_simulations, years_future))
+simulated_paths[:, 0] = df["OPS"].iloc[-1]  # Start from last known OPS
+
+# Predict future predictor values (for simplicity, assume last known values persist)
+last_predictors = df.iloc[-1][predictors].values
+
+for t in range(1, years_future):
+    influence = np.dot(betas, last_predictors) + intercept  # Influence from predictors
+    dW = np.random.normal(0, np.sqrt(dt), num_simulations)  # Wiener process increment
+    simulated_paths[:, t] = (
+        simulated_paths[:, t - 1] + theta * (influence - simulated_paths[:, t - 1]) * dt + sigma * dW
+    )
+
+# Plot results
+mean_projection = simulated_paths.mean(axis=0)
+lower_bound = np.percentile(simulated_paths, 5, axis=0)
+upper_bound = np.percentile(simulated_paths, 95, axis=0)
+
+plt.figure(figsize=(10, 5))
+plt.plot(future_seasons, mean_projection, label="Mean Projected OPS", color="blue", linewidth=2)
+plt.fill_between(future_seasons, lower_bound, upper_bound, color="blue", alpha=0.2, label="90% Confidence Interval")
+plt.plot(df["Season"], df["OPS"], label="Historical OPS", marker="o", linestyle="dashed", color="black")
+plt.xlabel("Season")
+plt.ylabel("OPS")
+plt.title("Projected OPS (Multivariate OU Process)")
+plt.legend()
+plt.grid(True)
