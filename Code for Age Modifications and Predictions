@@ -1,0 +1,65 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Historical OPS+ values for Paul Goldschmidt (2019-2025)
+years = np.array([2019, 2020, 2021, 2022, 2023, 2024, 2025])
+ops_plus = np.array([115, 145, 141, 177, 120, 100, 104])
+
+# Projected years (for example: 2026-2032)
+num_future = 7
+future_years = np.arange(years[-1] + 1, years[-1] + 1 + num_future)
+future_ages = np.arange(ages[-1] + 1, ages[-1] + 1 + num_future)
+
+# OU process with aging (as before)
+theta = 0.5
+sigma = 5.0
+mu_0 = np.mean(ops_plus)
+A_0 = 30  # Reference age (assume 30 in 2019)
+ages = np.arange(A_0, A_0 + len(years))  # Actual ages for historical
+beta = -2.5  # Decline per year after A_0
+
+# Define age-dependent mean
+def mu(age):
+    return mu_0 + beta * (age - A_0)
+
+# Monte Carlo simulation to get confidence intervals
+simulations = 5000
+dt = 1.0
+
+# Simulate trajectories
+prediction_matrix = np.zeros((simulations, num_future + 1))
+prediction_matrix[:, 0] = ops_plus[-1]  # Start at latest observed value
+
+np.random.seed(42)
+for sim in range(simulations):
+    X = ops_plus[-1]
+    for t in range(1, num_future + 1):
+        age_t = ages[-1] + t
+        drift = theta * (mu(age_t) - X) * dt
+        diffusion = sigma * np.random.normal(0, np.sqrt(dt))
+        X = X + drift + diffusion
+        prediction_matrix[sim, t] = X
+
+# Calculate the mean and 90% confidence bounds
+mean_pred = np.mean(prediction_matrix, axis=0)
+lower_bound = np.percentile(prediction_matrix, 5, axis=0)
+upper_bound = np.percentile(prediction_matrix, 95, axis=0)
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(years, ops_plus, 'ko-', label="Historical OPS+", alpha=0.8)
+plt.plot(
+    np.concatenate(([years[-1]], future_years)),
+    mean_pred, 'b-', label="Mean Projected OPS"
+)
+plt.fill_between(
+    np.concatenate(([years[-1]], future_years)),
+    lower_bound, upper_bound, color='cornflowerblue',
+    alpha=0.4, label="90% Confidence Interval"
+)
+plt.title("Projected OPS+ (OU Process with Aging Effect)")
+plt.xlabel("Season")
+plt.ylabel("OPS+")
+plt.grid(True)
+plt.legend()
+plt.show()
